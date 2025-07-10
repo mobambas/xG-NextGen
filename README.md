@@ -19,24 +19,22 @@ Conventional xG models—built almost exclusively on basic shot location and ang
 
 ## 📂 Repository Structure
 
+```
 xG‑NextGen/
-├── app.py # Streamlit demo: interactive & batch prediction
-├── requirements.txt # Python dependencies
-├── scripts/ # Utility scripts (JSON loading, freeze‑frame parsing)
-│ └── utils.py
-├── notebooks/ # Jupyter notebooks for each pipeline stage
-│ ├── 01_data_cleaning.ipynb
-│ ├── 02_feature_eng.ipynb
-│ └── 03_modeling.ipynb
-├── data/ # Not tracked (see .gitignore)
-│ ├── raw/ # StatsBomb JSON downloads
-│ └── processed/ # cleaned CSVs: shots.csv, freeze_frames.csv, features.csv
-├── models/ # trained model artifacts (e.g. xgboost_model.json)
-└── outputs/ # figures, SHAP values, logs, calibration plots
-
-yaml
-Copy
-Edit
+├── app.py                  # Streamlit demo: interactive & batch prediction
+├── requirements.txt        # Python dependencies
+├── scripts/                # Utility scripts (JSON loading, freeze‑frame parsing)
+│   └── utils.py
+├── notebooks/              # Jupyter notebooks for each pipeline stage
+│   ├── 01_data_cleaning.ipynb
+│   ├── 02_feature_eng.ipynb
+│   └── 03_modeling.ipynb
+├── models/                 # trained model artifacts (e.g. xgboost_model.json)
+├── outputs/                # figures, SHAP values, logs, calibration plots
+└── data/                   # *Not tracked* (see .gitignore)
+    ├── raw/                # StatsBomb JSON downloads
+    └── processed/          # cleaned CSVs: shots.csv, freeze_frames.csv, features.csv
+```
 
 > _Note: `data/raw/` and `data/processed/` are excluded from version control (see `.gitignore`)._
 
@@ -44,116 +42,123 @@ Edit
 
 ## 🔧 Setup & Installation
 
-1. **Clone this repo**  
-   ```bash
-   git clone https://github.com/mobambas/xG-NextGen.git
-   cd xG-NextGen
-Create & activate a Python environment
+### 1. Clone the repository
+```bash
+git clone https://github.com/mobambas/xG-NextGen.git
+cd xG-NextGen
+```
 
-bash
-Copy
-Edit
+### 2. Create and activate a Python virtual environment
+```bash
 python3.9 -m venv venv
-source venv/bin/activate
-Install dependencies
+source venv/bin/activate    # Linux/macOS
+venv\Scripts\activate     # Windows
+```
 
-bash
-Copy
-Edit
+### 3. Install required packages
+```bash
 pip install --upgrade pip
 pip install -r requirements.txt
-Download StatsBomb Open Data
-We leverage the free StatsBomb open‑data repository for training and testing:
-🔗 https://github.com/statsbomb/open-data
+```
 
-Download the events/*.json and lineups/*.json files for your chosen competitions.
+### 4. Download StatsBomb Open Data
 
-Place them under:
+We leverage the free StatsBomb open‑data repository for training and testing:  
+https://github.com/statsbomb/open-data
 
-bash
-Copy
-Edit
+Download the `events/*.json` and `lineups/*.json` files for your chosen competitions and place them under:
+
+```
 data/raw/events/
 data/raw/lineups/
-Run Data Cleaning
-Open and execute all cells in notebooks/01_data_cleaning.ipynb. This will:
+```
 
-Unzip & flatten raw JSON
+---
 
-Compute goal_difference, is_home, player positions
+## 📊 Run Data Cleaning
 
-Export shots.csv & freeze_frames.csv to data/processed/
+Open and execute all cells in:
 
-Engineer Features
-Open and execute notebooks/02_feature_eng.ipynb. This will:
+```
+notebooks/01_data_cleaning.ipynb
+```
 
-Load cleaned CSVs
+This will:
 
-Compute time, distance, angle, defensive pressure, assist type, pre‑shot sequence features
+- Unzip & flatten raw JSON
+- Compute `goal_difference`, `is_home`, and player positions
+- Export `shots.csv` & `freeze_frames.csv` to `data/processed/`
 
-One‑hot encode categoricals
+---
 
-Save features.csv to data/processed/
+## 🧠 Engineer Features
 
-Train & Evaluate Models
-Open and run notebooks/03_modeling.ipynb. This will:
+Open and execute:
 
-Split features.csv into train/test
+```
+notebooks/02_feature_eng.ipynb
+```
 
-Train XGBoost (and benchmarks)
+This will:
 
-Evaluate AUC‑ROC (~0.876), Brier score, log loss, calibration
+- Load cleaned CSVs
+- Compute time, distance, angle, defensive pressure, assist type, pre‑shot sequence features
+- One‑hot encode categoricals
+- Save `features.csv` to `data/processed/`
 
-Save best model to models/xgboost_model.json and SHAP outputs to outputs/
+---
 
-Launch the Streamlit Demo
+## 🧪 Train & Evaluate Models
 
-bash
-Copy
-Edit
+Open and run:
+
+```
+notebooks/03_modeling.ipynb
+```
+
+This will:
+
+- Split `features.csv` into train/test
+- Train XGBoost (and benchmarks)
+- Evaluate AUC‑ROC (~0.876), Brier score, log loss, calibration
+- Save best model to `models/xgboost_model.json` and SHAP outputs to `outputs/`
+
+---
+
+## 🚀 Launch the Streamlit Demo
+
+```bash
 streamlit run app.py
-Interactive mode: adjust the sidebar sliders for single‑shot predictions
+```
 
-Batch mode: upload a CSV of shot‑level features (same columns as trained features)
+- **Interactive mode:** adjust the sidebar sliders for single‑shot predictions  
+- **Batch mode:** upload a CSV of shot‑level features (same columns as trained features)
 
-🌟 Key Results & Metrics
-AUC‑ROC: 0.876
+---
 
-Brier Score: 0.0686
+## 🌟 Key Results & Metrics
 
-Log Loss: 0.2361
+- **AUC‑ROC:** 0.876  
+- **Brier Score:** 0.0686  
+- **Log Loss:** 0.2361  
 
-Top SHAP Features:
+**Top SHAP Features:**
 
-goal_difference
+- `goal_difference`  
+- `angle`  
+- `gk_distance`  
+- `distance`  
+- `minute`
 
-angle
+---
 
-gk_distance
+## 🎯 Project Goals
 
-distance
+- Reduce the gap between expected and actual goals.  
+- Explain every prediction, showing why a chance is rated at a given probability.  
+- Provide an open‑source foundation for future xG research and operational use.  
 
-minute
+---
 
-🎯 Project Goals
-Reduce the gap between expected and actual goals.
-
-Explain every prediction, showing why a chance is rated at a given probability.
-
-Provide an open‑source foundation for future xG research and operational use.
-
-Join me in redefining what it means to measure a “good chance” in the beautiful game.
+**Join me in redefining what it means to measure a “good chance” in the beautiful game.**  
 Pull requests, issues, or feature ideas are warmly welcome!
-
-makefile
-Copy
-Edit
-::contentReference[oaicite:0]{index=0}
-
-
-
-
-
-
-
-Sources
