@@ -8,9 +8,9 @@ import xgboost as xgb
 import shap
 from sklearn.metrics import brier_score_loss, roc_auc_score
 
-# ————————————————————————————————————————
+# —————————————————————————————————————————————
 # Constants & Model Loading
-# ————————————————————————————————————————
+# —————————————————————————————————————————————
 
 MODEL_PATH     = 'models/xgboost_model.json'
 FEATURE_COLUMNS = [
@@ -27,13 +27,16 @@ def load_model():
     return model
 
 @st.cache_resource
-def load_shap_explainer(model):
+def load_shap_explainer(_model):
+    # leading underscore → Streamlit skips hashing this argument
     # initialize on a zero‐filled sample
-    sample = pd.DataFrame([{c:0 for c in FEATURE_COLUMNS}])
-    return shap.Explainer(model, sample)
+    sample = pd.DataFrame([{c: 0 for c in FEATURE_COLUMNS}])
+    return shap.Explainer(_model, sample)
 
+# instantiate once
 model     = load_model()
 explainer = load_shap_explainer(model)
+
 
 # —————————————————————————————————————————————————
 # Sidebar: Single‐Shot Sliders
@@ -54,15 +57,19 @@ distance = np.hypot(x - goal_x, y - goal_y)
 angle    = np.degrees(np.arctan2(abs(y - goal_y), goal_x - x))
 
 st.sidebar.subheader("Defensive Pressure")
-defs            = st.sidebar.slider("Defenders within 5 m", 0, 10, 1)
-gk_dist         = st.sidebar.slider("Goalkeeper distance", 0.0, 50.0, 16.0)
-angular_pressure = st.sidebar.slider("Angular defensive pressure", 0.0, 1.5, 0.0, step=0.01)
+defs             = st.sidebar.slider("Defenders within 5 m", 0, 10, 1)
+gk_dist          = st.sidebar.slider("Goalkeeper distance", 0.0, 50.0, 16.0)
+angular_pressure = st.sidebar.slider(
+    "Angular defensive pressure", 0.0, 1.5, 0.0, step=0.01
+)
 
 st.sidebar.subheader("Possession Build‑Up")
 n_prev = st.sidebar.slider("# passes in last 5 events", 0, 5, 1)
 
 st.sidebar.subheader("Assist Type")
-assist = st.sidebar.selectbox("Assist type", ['None','Cross','Through Ball','Other'])
+assist = st.sidebar.selectbox(
+    "Assist type", ['None','Cross','Through Ball','Other']
+)
 
 # build single‐shot feature dict
 single_features = {
@@ -77,11 +84,13 @@ single_features = {
     'n_prev_passes':    n_prev,
     'angular_pressure': angular_pressure
 }
+
 # one‐hot assists
 for opt in ['Cross','Through Ball','Other']:
-    single_features[f'assist_{opt}'] = (assist == opt) * 1
+    single_features[f'assist_{opt}'] = int(assist == opt)
 
 single_df = pd.DataFrame([single_features])
+
 
 # —————————————————————————————————————————————————
 # Main: Single‐Shot Prediction + SHAP
@@ -92,18 +101,21 @@ st.title("xG‑NextGen Interactive & Batch Demo")
 st.subheader("Single‐Shot Prediction")
 st.write(single_df)
 
-xg_prob = model.predict_proba(single_df)[0,1]
+xg_prob = model.predict_proba(single_df)[0, 1]
 st.metric("Predicted xG", f"{xg_prob:.3f}")
 
 st.subheader("SHAP Waterfall Explanation")
 shap_values = explainer(single_df)
 fig = shap.plots._waterfall.waterfall_legacy(
-    explainer.expected_value, shap_values.values[0],
-    feature_names=FEATURE_COLUMNS, show=False
+    explainer.expected_value,
+    shap_values.values[0],
+    feature_names=FEATURE_COLUMNS,
+    show=False
 )
 st.pyplot(fig)
 
 st.markdown("---")
+
 
 # —————————————————————————————————————————————————
 # Sidebar: Batch CSV Upload
@@ -122,7 +134,7 @@ if upload:
         st.error(f"Missing feature columns: {missing}")
     else:
         # predict in batch
-        batch['xG'] = model.predict_proba(batch[FEATURE_COLUMNS])[:,1]
+        batch['xG'] = model.predict_proba(batch[FEATURE_COLUMNS])[:, 1]
         st.write(batch)
 
         # if ground truth available, compute metrics
