@@ -1,4 +1,4 @@
-# app.py – xG‑NextGen Interactive & Batch Demo
+# app.py – xG‑NextGen Interactive & Batch Demo (Option 2 patch)
 
 import os
 import streamlit as st
@@ -13,7 +13,8 @@ from sklearn.metrics import brier_score_loss, roc_auc_score
 # —————————————————————————————————————————————
 
 MODEL_PATH     = 'models/xgboost_model.json'
-FEATURE_COLUMNS = [
+# UI knows all 13, but model was trained on only 10:
+UI_FEATURES = [
     'goal_difference','is_home','minute','distance','angle',
     'defenders_in_5m','gk_distance','abs_goal_diff',
     'n_prev_passes','angular_pressure',
@@ -22,21 +23,20 @@ FEATURE_COLUMNS = [
 
 @st.cache_resource
 def load_model():
-    model = xgb.XGBClassifier()
-    model.load_model(MODEL_PATH)
-    return model
+    m = xgb.XGBClassifier()
+    m.load_model(MODEL_PATH)
+    return m
 
 @st.cache_resource
 def load_shap_explainer(_model):
-    # leading underscore → Streamlit skips hashing this argument
-    # initialize on a zero‐filled sample
-    sample = pd.DataFrame([{c: 0 for c in FEATURE_COLUMNS}])
+    # build explainer on a dummy DataFrame with exactly the model's feature names
+    trained_feats = _model.get_booster().feature_names
+    sample = pd.DataFrame([{c:0 for c in trained_feats}])
     return shap.Explainer(_model, sample)
 
-# instantiate once
-model     = load_model()
-explainer = load_shap_explainer(model)
-
+model       = load_model()
+explainer   = load_shap_explainer(model)
+trained_feats = model.get_booster().feature_names  # the 10 features your model expects
 
 # —————————————————————————————————————————————————
 # Sidebar: Single‐Shot Sliders
@@ -71,8 +71,8 @@ assist = st.sidebar.selectbox(
     "Assist type", ['None','Cross','Through Ball','Other']
 )
 
-# build single‐shot feature dict
-single_features = {
+# assemble the full UI DataFrame (13 cols)
+ui_dict = {
     'goal_difference':  gd,
     'is_home':          int(home),
     'minute':           minute,
@@ -84,12 +84,10 @@ single_features = {
     'n_prev_passes':    n_prev,
     'angular_pressure': angular_pressure
 }
-
-# one‐hot assists
 for opt in ['Cross','Through Ball','Other']:
-    single_features[f'assist_{opt}'] = int(assist == opt)
+    ui_dict[f'assist_{opt}'] = int(assist == opt)
 
-single_df = pd.DataFrame([single_features])
+single_df = pd.DataFrame([ui_dict])
 
 
 # —————————————————————————————————————————————————
@@ -98,18 +96,21 @@ single_df = pd.DataFrame([single_features])
 
 st.title("xG‑NextGen Interactive & Batch Demo")
 
-st.subheader("Single‐Shot Prediction")
+st.subheader("Single‐Shot Input")
 st.write(single_df)
 
-xg_prob = model.predict_proba(single_df)[0, 1]
+# SUBSET to exactly what the model expects:
+X_single = single_df[trained_feats]
+
+xg_prob = model.predict_proba(X_single)[0, 1]
 st.metric("Predicted xG", f"{xg_prob:.3f}")
 
 st.subheader("SHAP Waterfall Explanation")
-shap_values = explainer(single_df)
+shap_vals = explainer(X_single)
 fig = shap.plots._waterfall.waterfall_legacy(
     explainer.expected_value,
-    shap_values.values[0],
-    feature_names=FEATURE_COLUMNS,
+    shap_vals.values[0],
+    feature_names=trained_feats,
     show=False
 )
 st.pyplot(fig)
@@ -128,16 +129,15 @@ if upload:
     st.subheader("Batch Predictions")
     batch = pd.read_csv(upload)
 
-    # check required columns
-    missing = [c for c in FEATURE_COLUMNS if c not in batch.columns]
+    # ensure we drop any extra columns before predict
+    missing = [c for c in trained_feats if c not in batch.columns]
     if missing:
         st.error(f"Missing feature columns: {missing}")
     else:
-        # predict in batch
-        batch['xG'] = model.predict_proba(batch[FEATURE_COLUMNS])[:, 1]
+        X_batch = batch[trained_feats]
+        batch['xG'] = model.predict_proba(X_batch)[:, 1]
         st.write(batch)
 
-        # if ground truth available, compute metrics
         if 'goal' in batch.columns:
             brier = brier_score_loss(batch['goal'], batch['xG'])
             st.write(f"**Batch Brier score:** {brier:.4f}")
@@ -147,7 +147,6 @@ if upload:
             except:
                 pass
 
-        # plot distribution
         st.subheader("Predicted xG Distribution")
         st.bar_chart(batch['xG'])
 
