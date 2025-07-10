@@ -1,6 +1,5 @@
-# app.py – xG‑NextGen Interactive & Batch Demo (Option 2 patch)
+# app.py – xG‑NextGen Interactive & Batch Demo (Option 2 final)
 
-import os
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -12,14 +11,7 @@ from sklearn.metrics import brier_score_loss, roc_auc_score
 # Constants & Model Loading
 # —————————————————————————————————————————————
 
-MODEL_PATH     = 'models/xgboost_model.json'
-# UI knows all 13, but model was trained on only 10:
-UI_FEATURES = [
-    'goal_difference','is_home','minute','distance','angle',
-    'defenders_in_5m','gk_distance','abs_goal_diff',
-    'n_prev_passes','angular_pressure',
-    'assist_Cross','assist_Through Ball','assist_Other'
-]
+MODEL_PATH = 'models/xgboost_model.json'
 
 @st.cache_resource
 def load_model():
@@ -29,50 +21,51 @@ def load_model():
 
 @st.cache_resource
 def load_shap_explainer(_model):
-    # build explainer on a dummy DataFrame with exactly the model's feature names
+    # Build explainer on dummy DataFrame with the trained features
     trained_feats = _model.get_booster().feature_names
-    sample = pd.DataFrame([{c:0 for c in trained_feats}])
+    sample = pd.DataFrame([{c: 0 for c in trained_feats}])
     return shap.Explainer(_model, sample)
 
-model       = load_model()
-explainer   = load_shap_explainer(model)
-trained_feats = model.get_booster().feature_names  # the 10 features your model expects
+model        = load_model()
+explainer    = load_shap_explainer(model)
+trained_feats = model.get_booster().feature_names  # the exact list of 10 features
 
-# —————————————————————————————————————————————————
-# Sidebar: Single‐Shot Sliders
-# —————————————————————————————————————————————————
 
-st.sidebar.title("Single‐Shot Demo")
+# —————————————————————————————————————————————————————
+# Sidebar: Single‑Shot Inputs (UI collects all 13, we’ll subset later)
+# —————————————————————————————————————————————————————
 
-st.sidebar.subheader("Game Context")
+st.sidebar.title("Single‑Shot Demo")
+
+# Game context
 gd     = st.sidebar.slider("Goal difference before shot", -5, 5, 0)
 home   = st.sidebar.checkbox("Home team shooting?", value=True)
 minute = st.sidebar.slider("Match minute", 0.0, 95.0, 45.0)
 
-st.sidebar.subheader("Shot Geometry")
+# Shot geometry
 x = st.sidebar.slider("X coordinate", 0.0, 120.0, 60.0)
 y = st.sidebar.slider("Y coordinate", 0.0, 80.0, 40.0)
 goal_x, goal_y = 120, 40
 distance = np.hypot(x - goal_x, y - goal_y)
 angle    = np.degrees(np.arctan2(abs(y - goal_y), goal_x - x))
 
-st.sidebar.subheader("Defensive Pressure")
+# Defensive pressure
 defs             = st.sidebar.slider("Defenders within 5 m", 0, 10, 1)
 gk_dist          = st.sidebar.slider("Goalkeeper distance", 0.0, 50.0, 16.0)
 angular_pressure = st.sidebar.slider(
     "Angular defensive pressure", 0.0, 1.5, 0.0, step=0.01
 )
 
-st.sidebar.subheader("Possession Build‑Up")
+# Possession build‑up
 n_prev = st.sidebar.slider("# passes in last 5 events", 0, 5, 1)
 
-st.sidebar.subheader("Assist Type")
+# Assist type (UI only)
 assist = st.sidebar.selectbox(
     "Assist type", ['None','Cross','Through Ball','Other']
 )
 
-# assemble the full UI DataFrame (13 cols)
-ui_dict = {
+# Assemble UI dict (13 total)
+ui = {
     'goal_difference':  gd,
     'is_home':          int(home),
     'minute':           minute,
@@ -82,29 +75,33 @@ ui_dict = {
     'gk_distance':      gk_dist,
     'abs_goal_diff':    abs(gd),
     'n_prev_passes':    n_prev,
-    'angular_pressure': angular_pressure
+    'angular_pressure': angular_pressure,
 }
+
+# one‑hot assist
 for opt in ['Cross','Through Ball','Other']:
-    ui_dict[f'assist_{opt}'] = int(assist == opt)
+    ui[f'assist_{opt}'] = int(assist == opt)
 
-single_df = pd.DataFrame([ui_dict])
+single_df = pd.DataFrame([ui])
 
 
-# —————————————————————————————————————————————————
-# Main: Single‐Shot Prediction + SHAP
-# —————————————————————————————————————————————————
+# —————————————————————————————————————————————————————
+# Main: Single‑Shot Prediction & SHAP
+# —————————————————————————————————————————————————————
 
 st.title("xG‑NextGen Interactive & Batch Demo")
 
-st.subheader("Single‐Shot Input")
+st.subheader("Single‑Shot Input")
 st.write(single_df)
 
-# SUBSET to exactly what the model expects:
+# **SUBSET** to exactly the features the model was trained on
 X_single = single_df[trained_feats]
 
+# Predict xG
 xg_prob = model.predict_proba(X_single)[0, 1]
 st.metric("Predicted xG", f"{xg_prob:.3f}")
 
+# SHAP explanation on the exact same subset
 st.subheader("SHAP Waterfall Explanation")
 shap_vals = explainer(X_single)
 fig = shap.plots._waterfall.waterfall_legacy(
@@ -118,9 +115,9 @@ st.pyplot(fig)
 st.markdown("---")
 
 
-# —————————————————————————————————————————————————
+# —————————————————————————————————————————————————————
 # Sidebar: Batch CSV Upload
-# —————————————————————————————————————————————————
+# —————————————————————————————————————————————————————
 
 st.sidebar.title("Batch Upload")
 upload = st.sidebar.file_uploader("Upload shots CSV", type=["csv"])
@@ -129,10 +126,10 @@ if upload:
     st.subheader("Batch Predictions")
     batch = pd.read_csv(upload)
 
-    # ensure we drop any extra columns before predict
+    # ensure required cols
     missing = [c for c in trained_feats if c not in batch.columns]
     if missing:
-        st.error(f"Missing feature columns: {missing}")
+        st.error(f"Missing columns for model: {missing}")
     else:
         X_batch = batch[trained_feats]
         batch['xG'] = model.predict_proba(X_batch)[:, 1]
