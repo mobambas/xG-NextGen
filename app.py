@@ -6,6 +6,28 @@ import numpy as np
 import xgboost as xgb
 import shap
 from sklearn.metrics import brier_score_loss, roc_auc_score
+import sys
+import json
+
+st.write("🔍 Python version:", sys.version)
+st.write("🔍 XGBoost version:", xgb.__version__)
+
+try:
+    b = xgb.Booster()
+    b.load_model("models/xgboost_model.json")
+    st.write("✅ Model file loaded as Booster")
+
+    meta = b.attr("scikit_learn")
+    st.write("🔍 scikit_learn metadata:", meta)
+
+    if meta:
+        st.write("🔍 parsed metadata:", json.loads(meta))
+
+    st.write("🔍 feature names:", b.feature_names)
+
+except Exception as e:
+    st.write("❌ Error loading model file:")
+    st.write(e)
 
 # —————————————————————————————————————————————
 # Constants & Model Loading
